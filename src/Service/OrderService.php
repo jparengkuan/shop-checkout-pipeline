@@ -2,31 +2,27 @@
 
 namespace App\Service;
 
+use App\Message\OrderPaid;
 use App\Message\OrderPlaced;
 use App\Model\Customer;
 use App\Model\Order;
 use App\Model\OrderItem;
-use Symfony\Component\Messenger\Bridge\Amqp\Transport\AmqpStamp;
-use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
- * Places orders and announces them to the rest of the system via RabbitMQ.
+ * Places orders, records payments and announces both to the rest of the system via RabbitMQ.
  */
-class OrderService
+final readonly class OrderService
 {
     /**
-     * @param MessageBusInterface $bus Bus used to publish {@see OrderPlaced}
+     * @param OrderEventPublisher $publisher Publishes {@see OrderPlaced} and {@see OrderPaid}
      */
     public function __construct(
-        private readonly MessageBusInterface $bus,
+        private OrderEventPublisher $publisher,
     ) {
     }
 
     /**
-     * Places an order for the given customer and publishes an {@see OrderPlaced} message.
-     *
-     * The message is sent with routing key {@see OrderPlaced::ROUTING_KEY}, so every
-     * queue bound to it (such as "order_emails") receives the order.
+     * Places an order for the given customer and publishes {@see OrderPlaced}.
      *
      * @param Customer  $customer The customer placing the order
      * @param OrderItem ...$items The ordered products; at least one
@@ -37,10 +33,6 @@ class OrderService
      */
     public function order(Customer $customer, OrderItem ...$items): Order
     {
-        if ([] === $items) {
-            throw new \InvalidArgumentException('An order must contain at least one item.');
-        }
-
         $order = new Order(
             id: bin2hex(random_bytes(16)),
             customer: $customer,
@@ -48,8 +40,18 @@ class OrderService
             placedAt: new \DateTimeImmutable(),
         );
 
-        $this->bus->dispatch(new OrderPlaced($order), [new AmqpStamp(OrderPlaced::ROUTING_KEY)]);
+        $this->publisher->publish(new OrderPlaced($order));
 
         return $order;
+    }
+
+    /**
+     * Records that the order was paid and publishes {@see OrderPaid}.
+     *
+     * @param Order $order The order that was paid for
+     */
+    public function markPaid(Order $order): void
+    {
+        $this->publisher->publish(new OrderPaid($order, new \DateTimeImmutable()));
     }
 }

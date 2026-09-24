@@ -14,10 +14,15 @@ composer_version: "2"
 webimage_extra_packages: ["php${DDEV_PHP_VERSION}-amqp"]
 web_environment: []
 web_extra_daemons:
-    # Listens to RabbitMQ and handles OrderPlaced messages (sends the order email).
-    # The worker exits hourly or at 128M so supervisord restarts it with fresh code and memory.
+    # Messenger workers (see .ddev/messenger-worker.sh). Each exits hourly or at 128M
+    # so supervisord restarts it with fresh code and memory.
+    # Writes the invoice for each new order, then publishes order.invoiced.
+    - name: "invoice-worker"
+      command: "bash .ddev/messenger-worker.sh order_invoices"
+      directory: /var/www/html
+    # Sends the order confirmation (with invoice attached) and payment emails.
     - name: "email-worker"
-      command: "bash .ddev/email-worker.sh"
+      command: "bash .ddev/messenger-worker.sh order_emails"
       directory: /var/www/html
 corepack_enable: false
 default_container_timeout: "240"

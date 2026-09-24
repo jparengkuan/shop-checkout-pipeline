@@ -5,14 +5,13 @@ namespace App\Message;
 use App\Model\Order;
 
 /**
- * Published to the "orders" exchange on RabbitMQ whenever an order is placed.
+ * Published when an order is placed (routing key "order.placed").
  *
- * Every queue bound to {@see self::ROUTING_KEY} receives its own copy; currently
- * only "order_emails", consumed by {@see \App\MessageHandler\EmailConsumer}.
+ * Consumed by {@see \App\MessageHandler\InvoiceConsumer}; the confirmation email
+ * follows later, on {@see OrderInvoiced}.
  */
-final readonly class OrderPlaced
+final readonly class OrderPlaced implements OrderEvent
 {
-    /** Routing key on the "orders" exchange; queues bind to it to receive this message. */
     public const ROUTING_KEY = 'order.placed';
 
     /**
@@ -21,5 +20,10 @@ final readonly class OrderPlaced
     public function __construct(
         public Order $order,
     ) {
+    }
+
+    public function routingKey(): string
+    {
+        return self::ROUTING_KEY;
     }
 }

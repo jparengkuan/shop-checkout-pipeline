@@ -1,34 +1,46 @@
 framework:
     messenger:
         # Messages that still fail after all retries are parked here instead of dropped.
-        # Inspect/retry with: bin/console messenger:failed:show / messenger:failed:retry
+        # Inspect them in the RabbitMQ UI ("failed" queue); retry with: bin/console messenger:failed:retry
         failure_transport: failed
 
         transports:
-            # Publish side: everything about orders goes to the "orders" topic exchange.
+            # Publish side: every OrderEvent goes to the "orders" topic exchange.
             # It also declares every consumer queue, so no message is lost when a
             # message is published before its worker has ever started.
+            # The exchange and each queue's bindings are defined once here (&anchors)
+            # and reused by the consume side (*aliases), so they cannot drift apart.
             orders:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
                 options:
-                    exchange:
+                    exchange: &orders_exchange
                         name: orders
                         type: topic
                     queues:
-                        order_emails:
+                        # Step 1 for a new order: write the invoice, then publish order.invoiced.
+                        order_invoices: &order_invoices_queue
                             binding_keys: ['order.placed']
+                        # Step 2: send the confirmation (with invoice) and the payment email.
+                        # Bound to order.invoiced, not order.placed, so the invoice always exists.
+                        order_emails: &order_emails_queue
+                            binding_keys: ['order.invoiced', 'order.paid']
 
             # Consume side: one transport per consumer, each reading only its own queue.
-            # Consumed by the email-worker (see .ddev/email-worker.sh).
+            # Consumed by the invoice-worker (see .ddev/messenger-worker.sh).
+            order_invoices:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    exchange: *orders_exchange
+                    queues:
+                        order_invoices: *order_invoices_queue
+
+            # Consumed by the email-worker (see .ddev/messenger-worker.sh).
             order_emails:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
                 options:
-                    exchange:
-                        name: orders
-                        type: topic
+                    exchange: *orders_exchange
                     queues:
-                        order_emails:
-                            binding_keys: ['order.placed']
+                        order_emails: *order_emails_queue
 
             failed:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
@@ -39,16 +51,7 @@ framework:
                     queues:
                         failed: ~
 
-            sync: 'sync://'
-
         routing:
-            # Route only to the publish transport; the exchange fans out to the queues.
-            'App\Message\OrderPlaced': orders
-
-# when@test:
-#    framework:
-#        messenger:
-#            transports:
-#                # replace with your transport name here (e.g., my_transport: 'in-memory://')
-#                # For more Messenger testing tools, see https://github.com/zenstruck/messenger-test
-#                async: 'in-memory://'
+            # Every order event goes to the publish transport; the exchange routes it
+            # to the queues by routing key (see App\Service\OrderEventPublisher).
+            'App\Message\OrderEvent': orders

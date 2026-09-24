@@ -14,7 +14,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * Places random orders through {@see OrderService}, for testing the order pipeline.
  *
  * Each order goes through RabbitMQ like a real one, so the email worker sends a
- * confirmation to Mailpit. Usage: bin/console app:order:random [--count=N]
+ * confirmation to Mailpit. With --paid each order is also marked as paid, which
+ * sends a "payment received" email. Usage: bin/console app:order:random [--count=N] [--paid]
  */
 #[AsCommand(name: 'app:order:random', description: 'Places one or more random orders')]
 class GenerateRandomOrderCommand extends Command
@@ -46,6 +47,7 @@ class GenerateRandomOrderCommand extends Command
      *
      * @param SymfonyStyle $io    Console output
      * @param int          $count Number of orders to place, at least 1
+     * @param bool         $paid  Whether to mark each order as paid right after placing it
      *
      * @return int Command::SUCCESS, or Command::INVALID when --count is below 1
      */
@@ -53,6 +55,8 @@ class GenerateRandomOrderCommand extends Command
         SymfonyStyle $io,
         #[Option(description: 'Number of orders to place', shortcut: 'c')]
         int $count = 1,
+        #[Option(description: 'Also mark each order as paid (sends the payment email)', shortcut: 'p')]
+        bool $paid = false,
     ): int {
         if ($count < 1) {
             $io->error('--count must be at least 1.');
@@ -70,6 +74,11 @@ class GenerateRandomOrderCommand extends Command
                 $order->customer->email,
                 count($order->items),
             ));
+
+            if ($paid) {
+                $this->orderService->markPaid($order);
+                $io->writeln(sprintf('  Marked order <info>%s</info> as paid', $order->id));
+            }
         }
 
         $io->success(sprintf('%d order(s) placed.', $count));
