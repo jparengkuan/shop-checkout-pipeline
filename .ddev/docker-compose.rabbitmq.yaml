@@ -1,0 +1,30 @@
+# RabbitMQ service for DDEV
+# Management UI: https://shop-checkout-pipeline.ddev.site:15673 (login: guest/guest)
+# AMQP from other containers (e.g. web): amqp://guest:guest@rabbitmq:5672
+
+services:
+  rabbitmq:
+    container_name: ddev-${DDEV_SITENAME}-rabbitmq
+    image: rabbitmq:3.13-management
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: $DDEV_APPROOT
+    restart: "no"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+      - VIRTUAL_HOST=$DDEV_HOSTNAME
+      - HTTP_EXPOSE=15672
+      - HTTPS_EXPOSE=15673:15672
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
+  web:
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    links:
+      - rabbitmq
+
+volumes:
+  rabbitmq:

@@ -1,0 +1,54 @@
+framework:
+    messenger:
+        # Messages that still fail after all retries are parked here instead of dropped.
+        # Inspect/retry with: bin/console messenger:failed:show / messenger:failed:retry
+        failure_transport: failed
+
+        transports:
+            # Publish side: everything about orders goes to the "orders" topic exchange.
+            # It also declares every consumer queue, so no message is lost when a
+            # message is published before its worker has ever started.
+            orders:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    exchange:
+                        name: orders
+                        type: topic
+                    queues:
+                        order_emails:
+                            binding_keys: ['order.placed']
+
+            # Consume side: one transport per consumer, each reading only its own queue.
+            # Consumed by the email-worker (see .ddev/email-worker.sh).
+            order_emails:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    exchange:
+                        name: orders
+                        type: topic
+                    queues:
+                        order_emails:
+                            binding_keys: ['order.placed']
+
+            failed:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    exchange:
+                        name: failed
+                        type: fanout
+                    queues:
+                        failed: ~
+
+            sync: 'sync://'
+
+        routing:
+            # Route only to the publish transport; the exchange fans out to the queues.
+            'App\Message\OrderPlaced': orders
+
+# when@test:
+#    framework:
+#        messenger:
+#            transports:
+#                # replace with your transport name here (e.g., my_transport: 'in-memory://')
+#                # For more Messenger testing tools, see https://github.com/zenstruck/messenger-test
+#                async: 'in-memory://'

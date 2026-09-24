@@ -1,0 +1,3 @@
+# Always use LF line endings (required by .editorconfig, PHPCS and the shell scripts
+# that run inside the Linux DDEV containers), regardless of core.autocrlf.
+* text=auto eol=lf
