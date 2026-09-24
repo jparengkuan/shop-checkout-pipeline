@@ -1,0 +1,26 @@
+# Shared setup for the lint jobs: PHP 8.3, Composer and the project's dependencies.
+name: Setup PHP project
+description: Installs PHP 8.3 and Composer dependencies, with the Composer cache restored.
+
+runs:
+  using: composite
+  steps:
+    - uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        tools: composer:v2
+        coverage: none
+
+    - id: composer-cache
+      shell: bash
+      run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+        restore-keys: composer-${{ runner.os }}-
+
+    # ext-amqp is only needed at runtime to talk to RabbitMQ, not for static analysis.
+    - shell: bash
+      run: composer install --no-interaction --no-progress --no-scripts --ignore-platform-req=ext-amqp

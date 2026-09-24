@@ -1,0 +1,26 @@
+# Static analysis: PHP_CodeSniffer (PSR-12, phpcs.xml.dist) and PHPStan (level 5, phpstan.dist.neon).
+name: Lint
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  phpcs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: vendor/bin/phpcs
+
+  phpstan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # The Symfony extension reads the compiled container (see phpstan.dist.neon).
+      - run: bin/console cache:warmup --env=dev
+      - run: vendor/bin/phpstan analyse --level=5 --no-progress --memory-limit=1G
